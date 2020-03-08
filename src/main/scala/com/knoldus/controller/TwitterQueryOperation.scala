@@ -1,61 +1,45 @@
 package com.knoldus.controller
 
+import java.util.Date
 import com.knoldus.model.Connection
-import twitter4j.{Query, Status}
-
-import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
+case class TwitterPost(id:Long,createdAt:Date,favouriteCount:Int,reTweetCount:Int)
 
-class TwitterQueryOperation {
+class TwitterQueryOperation(connection: Connection) {
 
-  
-  
-  def getTweet(hashTag: String): Future[List[Status]] = Future{
-    val con = new Connection
-    val resultInstance = con.getTwitterInstance()
-    val query = new Query(hashTag)
-    val result=resultInstance.search(query)
-    result.getTweets.asScala.toList
-  }.fallbackTo{Future{List.empty[Status]}}
 
-  def getLength(tweets: Future[List[Status]]): Future[Int] = tweets.map(list=>list.length)
 
-  def getAverageTweet(tweets: Future[List[Status]]): Future[Int] = Future{
-    tweets.map(list=>list.length)
-  }.flatten.fallbackTo{Future{-100}}
+  def getTweet(hashTag: String): Future[List[TwitterPost]] = Future{
+    connection.getTwitterInstance(hashTag)
 
-  def getAverageLike(tweets: Future[List[Status]]):Future[Double]=Future{
-    val result=tweets.map(x=>x.map(y=>y.getFavoriteCount))
-    tweets.map(x=>x.map(y=>y.getFavoriteCount).sum)
-     println(result)
-       result.map(x=>x.sum).map(ff=>ff/15.0)
+  }.fallbackTo{Future{List.empty[TwitterPost]}}
+
+  def getLength(tweets: Future[List[TwitterPost]]): Future[Int] = tweets.map(list=>list.length)
+
+  def getAverageTweet(tweets: Future[List[TwitterPost]]): Future[Double] = Future{
+    val listOfDate = tweets.map(list=>list.map(date=>date.createdAt.getDate))
+    val sortedList =  listOfDate.map(_.sortWith((first,second)=>first<second))
+    val twitterSize:Future[Double]=tweets.map(size=>size.length)
+    sortedList.map(list=>list.reverse.head - list.head).map(dateDifference=>twitterSize.map(list=>list/dateDifference)).flatten
 
   }.flatten.fallbackTo{Future{-100}}
 
-  def getReTweet(tweets:Future[List[Status]]):Future[Double]=Future{
-    val result=tweets.map(x=>x.map(y=>y.getRetweetCount))
-    result.map(x=>x.sum).map(ff=>ff/15.0)
-
+  def getAverageLike(tweets: Future[List[TwitterPost]]):Future[Double]=Future{
+    val result=tweets.map(listUserPost=>listUserPost.map(userPost=>userPost.favouriteCount).sum)
+    val twitterSize:Future[Double]=tweets.map(size=>size.length)
+    val averageLike = result.map(average=>twitterSize.map(list=>average/list)).flatten
+    averageLike
   }.flatten.fallbackTo{Future{-100}}
 
-}
+  def getReTweet(tweets:Future[List[TwitterPost]]):Future[Double]=Future{
+    val result=tweets.map(listUserPost=>listUserPost.map(userPost=>userPost.reTweetCount).sum)
+    val twitterSize:Future[Double]=tweets.map(size=>size.length)
+     twitterSize.map(println)
+      result.map(println)
+    result.map(average=>twitterSize.map(list=>average/list)).flatten
 
-
-
-object Driver extends  App{
-  val temp=new TwitterQueryOperation
-  val instanceOfTweeter=temp.getTweet("#VIRAT")
-
-
-  val result=for{
-    numberOfTweet<-temp.getLength(instanceOfTweeter)
-    averageLike<-temp.getAverageLike(instanceOfTweeter)
-    averageRetweet<-temp.getReTweet(instanceOfTweeter)
-  }yield (numberOfTweet,averageLike,averageRetweet)
-
-  Thread.sleep(20000)
-  result.map(println)
+  }.flatten.fallbackTo{Future{-100}}
 
 }
